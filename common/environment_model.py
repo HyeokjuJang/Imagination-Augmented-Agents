@@ -13,9 +13,9 @@ class BasicBlock(nn.Module):
         
         self.maxpool = nn.MaxPool2d(kernel_size=in_shape[1:])
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_shape[0] * 2, n1, kernel_size=1, stride=2, padding=6),
+            nn.Conv2d(in_shape[0] * 2, n1, kernel_size=1, stride=2, padding=4),
             nn.ReLU(),
-            nn.Conv2d(n1, n1, kernel_size=10, stride=1, padding=(5, 6)),
+            nn.Conv2d(n1, n1, kernel_size=10, stride=1, padding=5),
             nn.ReLU(),
         )
         self.conv2 = nn.Sequential(
@@ -30,7 +30,11 @@ class BasicBlock(nn.Module):
         )
         
     def forward(self, inputs):
+        # print(inputs.shape) # 144,64,10,10
         x = self.pool_and_inject(inputs)
+        # print(x.shape) # 144,128,10,10
+        # print(self.conv1(x).shape) # 144,16,12,14
+        # print(self.conv2(x).shape) # 144,32,10,10
         x = torch.cat([self.conv1(x), self.conv2(x)], 1)
         x = self.conv3(x)
         x = torch.cat([x, inputs], 1)
@@ -51,7 +55,7 @@ class EnvModel(nn.Module):
         height = in_shape[2]
         
         self.conv = nn.Sequential(
-            nn.Conv2d(8, 64, kernel_size=1),
+            nn.Conv2d(12, 64, kernel_size=1),
             nn.ReLU()
         )
         
@@ -74,7 +78,7 @@ class EnvModel(nn.Module):
         
     def forward(self, inputs):
         batch_size = inputs.size(0)
-        
+
         x = self.conv(inputs)
         x = self.basic_block1(x)
         x = self.basic_block2(x)

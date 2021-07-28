@@ -16,6 +16,9 @@ from common.actor_critic import OnPolicy, ActorCritic, RolloutStorage
 
 import matplotlib.pyplot as plt
 
+import gym
+import gym_sokoban
+
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
@@ -68,12 +71,24 @@ def displayImage(image, step, reward):
 mode = "regular"
 num_envs = 16
 
+class ChannelFirstEnv(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.observation_space = gym.spaces.Box(0, 255, (3, 10, 10))
+    
+    def observation(self, obs):
+        obs = obs.reshape(3, 10, 10)
+        return obs
+
 def make_env():
     def _thunk():
-        env = MiniPacman(mode, 1000)
+        # env = MiniPacman(mode, 1000)
+        env = ChannelFirstEnv(gym.make('Boxoban-Train-v0'))
         return env
 
     return _thunk
+
+
 
 envs = [make_env() for i in range(num_envs)]
 envs = SubprocVecEnv(envs)
