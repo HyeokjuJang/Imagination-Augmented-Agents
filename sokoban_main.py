@@ -303,7 +303,6 @@ for i_update in range(num_frames):
         action = actor_critic.act(Variable(current_state))
 
         next_state, reward, done, _ = envs.step(action.squeeze(1).cpu().data.numpy())
-        print(next_state)
 
         reward = torch.FloatTensor(reward).unsqueeze(1)
         episode_rewards += reward
