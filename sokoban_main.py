@@ -283,8 +283,10 @@ current_state = torch.FloatTensor(np.float32(state))
 
 rollout.states[0].copy_(current_state)
 
-episode_rewards = torch.zeros(num_envs, 1)
-final_rewards   = torch.zeros(num_envs, 1)
+episode_rewards = torch.zeros(num_envs, 1) - torch.ones(num_envs, 1) * 100
+final_rewards   = torch.zeros(num_envs, 1) - torch.ones(num_envs, 1) * 100
+
+best_reward = -100.0
 
 for i_update in range(num_frames):
 
@@ -347,7 +349,12 @@ for i_update in range(num_frames):
         all_rewards.append(final_rewards.mean())
         all_losses.append(loss.item())
         
-        print('epoch %s. reward: %s, loss: %s' % (i_update, np.mean(all_rewards[-10:]), all_losses[-1]))
+        print('epoch %s. reward: %s, loss: %s' % (i_update, all_rewards[-1].numpy(), all_losses[-1]))
+
+        if all_rewards[-1].numpy() > best_reward:
+            best_reward = all_rewards[-1].numpy()
+            torch.save(actor_critic.state_dict(), f"i2a_{mode}_{i_update}_{best_reward}")
+
         # plt.figure(figsize=(20,5))
         # plt.subplot(131)
         # plt.title('epoch %s. reward: %s' % (i_update, np.mean(all_rewards[-10:])))
@@ -358,5 +365,3 @@ for i_update in range(num_frames):
         # plt.draw()
         
     rollout.after_update()
-
-torch.save(actor_critic.state_dict(), "i2a_" + mode)
