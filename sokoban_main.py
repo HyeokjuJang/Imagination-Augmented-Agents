@@ -22,14 +22,17 @@ import gym_sokoban
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
+load_env_filename = None#"sokoban_i2a_env_regular_100_-19.87504005432129"
+load_ac_filename = None#"sokoban_i2a_actor_critic_regular_100_-19.87504005432129"
+
 pixels = (
-    (0.0, 1.0, 0.0), 
-    (0.0, 1.0, 1.0),
-    (0.0, 0.0, 1.0),
-    (1.0, 1.0, 1.0),
-    (1.0, 1.0, 0.0), 
-    (0.0, 0.0, 0.0),
-    (1.0, 0.0, 0.0)
+    (0, 0, 0),
+    (243, 248, 238), 
+    (254, 126, 125),
+    (254, 95, 56),
+    (142, 121, 56),
+    (160, 212, 56), 
+    (219, 212, 56)
 )
 pixel_to_onehot = {pix:i for i, pix in enumerate(pixels)} 
 num_pixels = len(pixels)
@@ -39,7 +42,8 @@ task_rewards = {
     "avoid":   [0.1, -0.1, -5, -10, -20],
     "hunt":    [0, 1, 10, -20],
     "ambush":  [0, -0.1, 10, -20],
-    "rush":    [0, -0.1, 9.9]
+    "rush":    [0, -0.1, 9.9],
+    "sokoban": [1, -1, -0.1]
 }
 reward_to_onehot = {mode: {reward:i for i, reward in enumerate(task_rewards[mode])} for mode in task_rewards.keys()}
 
@@ -68,7 +72,7 @@ def displayImage(image, step, reward):
     plt.imshow(image)
     plt.show()
 
-mode = "regular"
+mode = "sokoban"
 num_envs = 8
 
 class ChannelFirstEnv(gym.ObservationWrapper):
@@ -243,9 +247,12 @@ class ImaginationCore(object):
 
 full_rollout = True
 env_model     = EnvModel(envs.observation_space.shape, num_pixels, num_rewards)
-#env_model.load_state_dict(torch.load("env_model_" + mode))
+if load_env_filename:
+    env_model.load_state_dict(torch.load(load_env_filename))
 
 distil_policy = ActorCritic(envs.observation_space.shape, envs.action_space.n)
+if load_ac_filename:
+    distil_policy.load_state_dict(torch.load(load_env_filename))
 distil_optimizer = optim.Adam(distil_policy.parameters())
 
 imagination = ImaginationCore(1, state_shape, num_actions, num_rewards, env_model, distil_policy, full_rollout=full_rollout)
@@ -296,6 +303,7 @@ for i_update in range(num_frames):
         action = actor_critic.act(Variable(current_state))
 
         next_state, reward, done, _ = envs.step(action.squeeze(1).cpu().data.numpy())
+        print(next_state)
 
         reward = torch.FloatTensor(reward).unsqueeze(1)
         episode_rewards += reward
@@ -353,7 +361,8 @@ for i_update in range(num_frames):
 
         if all_rewards[-1].numpy() > best_reward:
             best_reward = all_rewards[-1].numpy()
-            torch.save(actor_critic.state_dict(), f"i2a_{mode}_{i_update}_{best_reward}")
+            torch.save(actor_critic.state_dict(), f"sokoban_i2a_actor_critic_{mode}_{i_update}_{best_reward}")
+            torch.save(env_model.state_dict(), f"sokoban_i2a_env_{mode}_{i_update}_{best_reward}")
 
         # plt.figure(figsize=(20,5))
         # plt.subplot(131)
