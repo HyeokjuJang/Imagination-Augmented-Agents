@@ -69,7 +69,7 @@ def displayImage(image, step, reward):
     plt.show()
 
 mode = "regular"
-num_envs = 16
+num_envs = 8
 
 class ChannelFirstEnv(gym.ObservationWrapper):
     def __init__(self, env):
@@ -78,7 +78,7 @@ class ChannelFirstEnv(gym.ObservationWrapper):
     
     def observation(self, obs):
         obs = obs.reshape(3, 10, 10)
-        return obs
+        return obs / 255.
 
 def make_env():
     def _thunk():
@@ -106,7 +106,11 @@ class RolloutEncoder(nn.Module):
         self.features = nn.Sequential(
             nn.Conv2d(in_shape[0], 16, kernel_size=3, stride=1),
             nn.ReLU(),
-            nn.Conv2d(16, 16, kernel_size=3, stride=2),
+            nn.Conv2d(16, 32, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1),
             nn.ReLU(),
         )
         
@@ -140,7 +144,11 @@ class I2A(OnPolicy):
         self.features = nn.Sequential(
             nn.Conv2d(in_shape[0], 16, kernel_size=3, stride=1),
             nn.ReLU(),
-            nn.Conv2d(16, 16, kernel_size=3, stride=2),
+            nn.Conv2d(16, 32, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1),
             nn.ReLU(),
         )
         
@@ -247,8 +255,10 @@ actor_critic = I2A(state_shape, num_actions, num_rewards, 256, imagination, full
 lr    = 7e-4
 eps   = 1e-5
 alpha = 0.99
-optimizer = optim.RMSprop(actor_critic.parameters(), lr, eps=eps, alpha=alpha)
-
+#rmsprop
+#optimizer = optim.RMSprop(actor_critic.parameters(), lr, eps=eps, alpha=alpha)
+#adam:
+optimizer = optim.Adam(actor_critic.parameters(), lr=lr, eps=eps)
 
 if USE_CUDA:
     env_model     = env_model.cuda()
@@ -259,8 +269,8 @@ gamma = 0.99
 entropy_coef = 0.01
 value_loss_coef = 0.5
 max_grad_norm = 0.5
-num_steps = 5
-num_frames = int(10e5)
+num_steps = 60
+num_frames = int(10e6)
 
 rollout = RolloutStorage(num_steps, num_envs, envs.observation_space.shape)
 rollout.cuda()
