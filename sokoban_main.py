@@ -22,8 +22,9 @@ import gym_sokoban
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
-load_env_filename = None#"sokoban_i2a_env_regular_100_-19.87504005432129"
-load_ac_filename = None#"sokoban_i2a_actor_critic_regular_100_-19.87504005432129"
+load_env_filename = "sokoban_i2a_env_sokoban_100_-19.87504005432129"
+load_distill_filename = "sokoban_i2a_distill_sokoban_100_-19.87504005432129"
+load_ac_filename = "sokoban_i2a_ac_sokoban_100_-19.87504005432129"
 
 pixels = (
     (0, 0, 0),
@@ -73,7 +74,7 @@ def displayImage(image, step, reward):
     plt.show()
 
 mode = "sokoban"
-num_envs = 8
+num_envs = 16
 
 class ChannelFirstEnv(gym.ObservationWrapper):
     def __init__(self, env):
@@ -251,13 +252,16 @@ if load_env_filename:
     env_model.load_state_dict(torch.load(load_env_filename))
 
 distil_policy = ActorCritic(envs.observation_space.shape, envs.action_space.n)
-if load_ac_filename:
-    distil_policy.load_state_dict(torch.load(load_env_filename))
+if load_distill_filename:
+    distil_policy.load_state_dict(torch.load(load_distill_filename))
 distil_optimizer = optim.Adam(distil_policy.parameters())
 
 imagination = ImaginationCore(1, state_shape, num_actions, num_rewards, env_model, distil_policy, full_rollout=full_rollout)
 
 actor_critic = I2A(state_shape, num_actions, num_rewards, 256, imagination, full_rollout=full_rollout)
+if load_ac_filename:
+    actor_critic.load_state_dict(torch.load(load_ac_filename))
+
 #rmsprop hyperparams:
 lr    = 7e-4
 eps   = 1e-5
@@ -360,8 +364,9 @@ for i_update in range(num_frames):
 
         if all_rewards[-1].numpy() > best_reward:
             best_reward = all_rewards[-1].numpy()
-            torch.save(actor_critic.state_dict(), f"sokoban_i2a_actor_critic_{mode}_{i_update}_{best_reward}")
-            torch.save(env_model.state_dict(), f"sokoban_i2a_env_{mode}_{i_update}_{best_reward}")
+            torch.save(actor_critic.state_dict(), f"results/sokoban_i2a_ac_{mode}_{i_update}_{best_reward}")
+            torch.save(env_model.state_dict(), f"results/sokoban_i2a_env_{mode}_{i_update}_{best_reward}")
+            torch.save(distil_policy.state_dict(), f"results/sokoban_i2a_distill_{mode}_{i_update}_{best_reward}")
 
         # plt.figure(figsize=(20,5))
         # plt.subplot(131)
