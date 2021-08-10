@@ -22,9 +22,9 @@ import gym_sokoban
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
-load_env_filename = "sokoban_i2a_env_sokoban_100_-19.87504005432129"
-load_distill_filename = "sokoban_i2a_distill_sokoban_100_-19.87504005432129"
-load_ac_filename = "sokoban_i2a_ac_sokoban_100_-19.87504005432129"
+load_env_filename = None#"sokoban_i2a_env_sokoban_100_-19.87504005432129"
+load_distill_filename = None#"sokoban_i2a_distill_sokoban_100_-19.87504005432129"
+load_ac_filename = None#"sokoban_i2a_ac_sokoban_100_-19.87504005432129"
 
 pixels = (
     (0, 0, 0),
@@ -74,7 +74,7 @@ def displayImage(image, step, reward):
     plt.show()
 
 mode = "sokoban"
-num_envs = 16
+num_envs = 8
 
 class ChannelFirstEnv(gym.ObservationWrapper):
     def __init__(self, env):
@@ -82,7 +82,7 @@ class ChannelFirstEnv(gym.ObservationWrapper):
         self.observation_space = gym.spaces.Box(0, 255, (3, 10, 10))
     
     def observation(self, obs):
-        obs = obs.reshape(3, 10, 10)
+        obs = obs.transpose(2, 0, 1)
         return obs
 
 def make_env():
@@ -280,7 +280,7 @@ gamma = 0.99
 entropy_coef = 0.01
 value_loss_coef = 0.5
 max_grad_norm = 0.5
-num_steps = 60
+num_steps = 5
 num_frames = int(10e6)
 
 rollout = RolloutStorage(num_steps, num_envs, envs.observation_space.shape)

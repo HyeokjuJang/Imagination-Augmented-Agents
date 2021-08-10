@@ -1,3 +1,4 @@
 common/__pycache__/
 .sokoban_cache/
 .idea/
+results/*
