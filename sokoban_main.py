@@ -43,7 +43,7 @@ task_rewards = {
     "hunt":    [0, 1, 10, -20],
     "ambush":  [0, -0.1, 10, -20],
     "rush":    [0, -0.1, 9.9],
-    "sokoban": [1, -1, -0.1]
+    "sokoban": [-0.1, 1.0, -1.0, 10.0]
 }
 reward_to_onehot = {mode: {reward:i for i, reward in enumerate(task_rewards[mode])} for mode in task_rewards.keys()}
 
@@ -82,7 +82,7 @@ class ChannelFirstEnv(gym.ObservationWrapper):
     
     def observation(self, obs):
         obs = obs.reshape(3, 10, 10)
-        return obs / 255.
+        return obs
 
 def make_env():
     def _thunk():
