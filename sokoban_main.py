@@ -19,6 +19,16 @@ import matplotlib.pyplot as plt
 import gym
 import gym_sokoban
 
+import argparse
+
+parser = argparse.ArgumentParser(description='Process some integers.')
+parser.add_argument('--num_steps', type=int, default=8,
+                    help='num of steps')
+parser.add_argument('--num_envs', type=int, default=8,
+                    help='num of cpus')
+
+args = parser.parse_args()
+
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
@@ -74,7 +84,7 @@ def displayImage(image, step, reward):
     plt.show()
 
 mode = "sokoban"
-num_envs = 8
+num_envs = args.num_envs
 
 class ChannelFirstEnv(gym.ObservationWrapper):
     def __init__(self, env):
@@ -280,7 +290,7 @@ gamma = 0.99
 entropy_coef = 0.01
 value_loss_coef = 0.5
 max_grad_norm = 0.5
-num_steps = 5
+num_steps = args.num_steps
 num_frames = int(10e6)
 
 rollout = RolloutStorage(num_steps, num_envs, envs.observation_space.shape)
