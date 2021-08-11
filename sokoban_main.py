@@ -20,14 +20,18 @@ import gym
 import gym_sokoban
 
 import argparse
+from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--num_steps', type=int, default=8,
                     help='num of steps')
 parser.add_argument('--num_envs', type=int, default=8,
                     help='num of cpus')
+parser.add_argument('--id', type=str, default="default",
+                    help='id')
 
 args = parser.parse_args()
+writer = SummaryWriter(f'results/{args.id}')
 
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
@@ -374,9 +378,12 @@ for i_update in range(num_frames):
 
         if all_rewards[-1].numpy() > best_reward:
             best_reward = all_rewards[-1].numpy()
-            torch.save(actor_critic.state_dict(), f"results/sokoban_i2a_ac_{mode}_{i_update}_{best_reward}")
-            torch.save(env_model.state_dict(), f"results/sokoban_i2a_env_{mode}_{i_update}_{best_reward}")
-            torch.save(distil_policy.state_dict(), f"results/sokoban_i2a_distill_{mode}_{i_update}_{best_reward}")
+            torch.save(actor_critic.state_dict(), f"results/{args.id}/sokoban_i2a_ac_{mode}_{i_update}_{best_reward}")
+            torch.save(env_model.state_dict(), f"results/{args.id}/sokoban_i2a_env_{mode}_{i_update}_{best_reward}")
+            torch.save(distil_policy.state_dict(), f"results/{args.id}/sokoban_i2a_distill_{mode}_{i_update}_{best_reward}")
+
+        writer.add_scalar('reward', all_rewards[-1].numpy(), i_update)
+        writer.add_scalar('loss', all_losses[-1], i_update)
 
         # plt.figure(figsize=(20,5))
         # plt.subplot(131)
