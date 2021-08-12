@@ -58,7 +58,7 @@ task_rewards = {
     "hunt":    [0, 1, 10, -20],
     "ambush":  [0, -0.1, 10, -20],
     "rush":    [0, -0.1, 9.9],
-    "sokoban": [-0.1, 1.0, -1.0, 10.0]
+    "sokoban": [-0.1, 0.9, -1.1, 9.9]
 }
 reward_to_onehot = {mode: {reward:i for i, reward in enumerate(task_rewards[mode])} for mode in task_rewards.keys()}
 
@@ -212,6 +212,9 @@ for i_update in range(num_frames):
         # plt.title('loss %s' % all_losses[-1])
         # plt.plot(all_losses)
         # plt.show()
+    
+    if i_update % 100000 == 0:
+        torch.save(actor_critic.state_dict(), "actor_critic_" + mode + str(i_update))        
         
     rollout.after_update()
 

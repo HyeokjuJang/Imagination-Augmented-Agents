@@ -36,7 +36,7 @@ writer = SummaryWriter(f'results/{args.id}')
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
-load_env_filename = None#"sokoban_i2a_env_sokoban_100_-19.87504005432129"
+load_env_filename = "env_model_sokoban"
 load_distill_filename = None#"sokoban_i2a_distill_sokoban_100_-19.87504005432129"
 load_ac_filename = None#"sokoban_i2a_ac_sokoban_100_-19.87504005432129"
 
@@ -160,42 +160,42 @@ num_updates = 1000000
 losses = []
 all_rewards = []
 
-for frame_idx, states, actions, rewards, next_states, dones in play_games(envs, num_updates):
-    states      = torch.FloatTensor(states)
-    actions     = torch.LongTensor(actions)
+# for frame_idx, states, actions, rewards, next_states, dones in play_games(envs, num_updates):
+#     states      = torch.FloatTensor(states)
+#     actions     = torch.LongTensor(actions)
 
-    batch_size = states.size(0)
+#     batch_size = states.size(0)
     
-    onehot_actions = torch.zeros(batch_size, num_actions, *state_shape[1:])
-    onehot_actions[range(batch_size), actions] = 1
-    inputs = Variable(torch.cat([states, onehot_actions], 1))
+#     onehot_actions = torch.zeros(batch_size, num_actions, *state_shape[1:])
+#     onehot_actions[range(batch_size), actions] = 1
+#     inputs = Variable(torch.cat([states, onehot_actions], 1))
     
-    if USE_CUDA:
-        inputs = inputs.cuda()
+#     if USE_CUDA:
+#         inputs = inputs.cuda()
 
-    imagined_state, imagined_reward = env_model(inputs)
+#     imagined_state, imagined_reward = env_model(inputs)
 
-    target_state = pix_to_target(next_states)
-    target_state = Variable(torch.LongTensor(target_state))
+#     target_state = pix_to_target(next_states)
+#     target_state = Variable(torch.LongTensor(target_state))
     
-    target_reward = rewards_to_target(mode, rewards)
-    target_reward = Variable(torch.LongTensor(target_reward))
+#     target_reward = rewards_to_target(mode, rewards)
+#     target_reward = Variable(torch.LongTensor(target_reward))
 
-    optimizer.zero_grad()
-    image_loss  = criterion(imagined_state, target_state)
-    reward_loss = criterion(imagined_reward, target_reward)
-    loss = image_loss + reward_coef * reward_loss
-    loss.backward()
-    optimizer.step()
+#     optimizer.zero_grad()
+#     image_loss  = criterion(imagined_state, target_state)
+#     reward_loss = criterion(imagined_reward, target_reward)
+#     loss = image_loss + reward_coef * reward_loss
+#     loss.backward()
+#     optimizer.step()
     
-    losses.append(loss.item())
-    all_rewards.append(np.mean(rewards))
+#     losses.append(loss.item())
+#     all_rewards.append(np.mean(rewards))
     
-    if frame_idx % 10 == 0:
-        print('epoch %s. reward: %s, loss: %s' % (frame_idx, all_rewards[-1], losses[-1]))
-        #plot(frame_idx, all_rewards, losses)
+#     if frame_idx % 10 == 0:
+#         print('epoch %s. reward: %s, loss: %s' % (frame_idx, all_rewards[-1], losses[-1]))
+#         #plot(frame_idx, all_rewards, losses)
 
-torch.save(env_model.state_dict(), "env_model_" + mode)
+# torch.save(env_model.state_dict(), "env_model_" + mode)
 
 import time
 
@@ -230,7 +230,9 @@ while not done:
     
     imagined_image = target_to_pix(imagined_state.view(batch_size, -1, len(pixels))[0].max(1)[1].data.cpu().numpy())
     imagined_image = imagined_image.reshape(10, 10, 3)
+    # print(imagined_image)
     state_image = torch.FloatTensor(next_state).permute(1, 2, 0).cpu().numpy()
+    print(state_image)
     
     plt.figure(figsize=(10,3))
     plt.subplot(131)
@@ -238,7 +240,7 @@ while not done:
     plt.imshow(imagined_image)
     plt.subplot(132)
     plt.title("Actual")
-    plt.imshow(state_image)
+    plt.imshow(np.array(state_image, dtype=np.uint8))
     plt.show()
     time.sleep(0.3)
     
