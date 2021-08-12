@@ -23,7 +23,7 @@ import argparse
 from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--num_steps', type=int, default=8,
+parser.add_argument('--num_steps', type=int, default=5,
                     help='num of steps')
 parser.add_argument('--num_envs', type=int, default=8,
                     help='num of cpus')
@@ -36,7 +36,7 @@ writer = SummaryWriter(f'results/{args.id}')
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
-load_env_filename = None#"sokoban_i2a_env_sokoban_100_-19.87504005432129"
+load_env_filename = "env_model_sokoban"
 load_distill_filename = None#"sokoban_i2a_distill_sokoban_100_-19.87504005432129"
 load_ac_filename = None#"sokoban_i2a_ac_sokoban_100_-19.87504005432129"
 
