@@ -58,7 +58,7 @@ task_rewards = {
     "hunt":    [0, 1, 10, -20],
     "ambush":  [0, -0.1, 10, -20],
     "rush":    [0, -0.1, 9.9],
-    "sokoban": [-0.1, 0.9, -1.1, 9.9]
+    "sokoban": [-0.1, 0.9, -1.1, 9.9, 10.9]
 }
 reward_to_onehot = {mode: {reward:i for i, reward in enumerate(task_rewards[mode])} for mode in task_rewards.keys()}
 
@@ -155,7 +155,7 @@ def play_games(envs, frames):
         states = next_states
 
 reward_coef = 0.1
-num_updates = 1000000
+num_updates = 10000000
 
 losses = []
 all_rewards = []
@@ -191,7 +191,7 @@ for frame_idx, states, actions, rewards, next_states, dones in play_games(envs, 
     losses.append(loss.item())
     all_rewards.append(np.mean(rewards))
     
-    if frame_idx % 10 == 0:
+    if frame_idx % 100 == 0:
         print('epoch %s. reward: %s, loss: %s' % (frame_idx, all_rewards[-1], losses[-1]))
         #plot(frame_idx, all_rewards, losses)
 
