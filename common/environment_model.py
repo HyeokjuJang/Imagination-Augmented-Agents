@@ -92,3 +92,59 @@ class EnvModel(nn.Module):
         reward = self.reward_fc(reward)
         
         return image, reward
+
+class EnvModelSokoban(nn.Module):
+    def __init__(self, in_shape, num_pixels, num_rewards):
+        super(EnvModelSokoban, self).__init__()
+        
+        width  = in_shape[1]
+        height = in_shape[2]
+        
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(12, 32, kernel_size=1), #input channel is 12
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.ReLU()
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.ReLU()
+        )
+
+        self.image_conv = nn.Sequential(
+            nn.Conv2d(32, 256, kernel_size=1),
+            nn.ReLU()
+        )
+
+        self.image_fc = nn.Linear(256, num_pixels)
+        
+        self.reward_conv = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=3),
+            nn.MaxPool2d(kernel_size=2),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3),
+            nn.MaxPool2d(kernel_size=2),
+            nn.ReLU()
+        )
+
+        self.reward_fc = nn.Linear(32, num_rewards)
+        
+    def forward(self, inputs):
+        # inputs has already concatenated.(state + action)
+        batch_size = inputs.size(0)
+
+        x = self.conv1(inputs)
+        c1o = x
+        x = self.conv2(x)
+        x = c1o + x # nx32x10x10
+
+        image = self.image_conv(x)
+        image = image.permute(0, 2, 3, 1).contiguous().view(-1, 256)
+        image = self.image_fc(image)
+        
+        reward = self.reward_conv(x)
+        reward = reward.view(batch_size, -1)
+        reward = self.reward_fc(reward)
+
+        return image, reward

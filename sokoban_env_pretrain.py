@@ -11,7 +11,7 @@ import torch.autograd as autograd
 
 from common.multiprocessing_env import SubprocVecEnv
 from common.minipacman import MiniPacman
-from common.environment_model import EnvModel
+from common.environment_model import EnvModelSokoban as EnvModel
 from common.actor_critic import OnPolicy, ActorCritic, RolloutStorage
 
 import matplotlib.pyplot as plt
@@ -155,7 +155,7 @@ def play_games(envs, frames):
         states = next_states
 
 reward_coef = 0.1
-num_updates = 10000000
+num_updates = 1000000
 
 losses = []
 all_rewards = []
@@ -172,12 +172,11 @@ for frame_idx, states, actions, rewards, next_states, dones in play_games(envs, 
     
     if USE_CUDA:
         inputs = inputs.cuda()
-
     imagined_state, imagined_reward = env_model(inputs)
 
     target_state = pix_to_target(next_states)
     target_state = Variable(torch.LongTensor(target_state))
-    
+
     target_reward = rewards_to_target(mode, rewards)
     target_reward = Variable(torch.LongTensor(target_reward))
 
@@ -195,7 +194,7 @@ for frame_idx, states, actions, rewards, next_states, dones in play_games(envs, 
         print('epoch %s. reward: %s, loss: %s' % (frame_idx, all_rewards[-1], losses[-1]))
         #plot(frame_idx, all_rewards, losses)
 
-torch.save(env_model.state_dict(), "env_model_" + mode)
+torch.save(env_model.state_dict(), "env_model_" + mode + "_model_changed")
 
 import time
 
