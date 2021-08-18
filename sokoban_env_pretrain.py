@@ -194,7 +194,7 @@ for frame_idx, states, actions, rewards, next_states, dones in play_games(envs, 
         print('epoch %s. reward: %s, loss: %s' % (frame_idx, all_rewards[-1], losses[-1]))
         #plot(frame_idx, all_rewards, losses)
 
-torch.save(env_model.state_dict(), "env_model_" + mode + "_model_changed")
+torch.save(env_model.state_dict(), "env_model_" + mode)
 
 import time
 
