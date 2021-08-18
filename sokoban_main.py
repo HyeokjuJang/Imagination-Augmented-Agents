@@ -11,7 +11,7 @@ import torch.autograd as autograd
 
 from common.multiprocessing_env import SubprocVecEnv
 from common.minipacman import MiniPacman
-from common.environment_model import EnvModel
+from common.environment_model import EnvModelSokoban as EnvModel
 from common.actor_critic import OnPolicy, ActorCritic, RolloutStorage
 
 import matplotlib.pyplot as plt
