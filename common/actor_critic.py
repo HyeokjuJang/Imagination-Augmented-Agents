@@ -14,13 +14,15 @@ class OnPolicy(nn.Module):
         
     def act(self, x, deterministic=False):
         logit, value = self.forward(x)
-        probs = F.softmax(logit)
+        print("logit", logit)
+        probs = F.softmax(logit, dim=1)
+        print("probs", probs)
         
         if deterministic:
             action = probs.max(1)[1]
         else:
             action = probs.multinomial(1)
-        
+        print("action", action)
         return action
     
     def evaluate_actions(self, x, action):

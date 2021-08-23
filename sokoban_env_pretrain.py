@@ -29,6 +29,8 @@ parser.add_argument('--num_envs', type=int, default=8,
                     help='num of cpus')
 parser.add_argument('--id', type=str, default="default",
                     help='id')
+parser.add_argument('--test', action='store_true',
+                    help='if only test')
 
 args = parser.parse_args()
 writer = SummaryWriter(f'results/{args.id}')
@@ -36,9 +38,12 @@ writer = SummaryWriter(f'results/{args.id}')
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
-load_env_filename = "env_model_sokoban"
-load_distill_filename = None#"sokoban_i2a_distill_sokoban_100_-19.87504005432129"
-load_ac_filename = None#"sokoban_i2a_ac_sokoban_100_-19.87504005432129"
+load_env_filename = None
+load_ac_filename = "actor_critic_sokoban"
+
+if args.test:
+    load_env_filename = "env_model_sokoban_env_fixed"
+    load_ac_filename = "actor_critic_sokoban"
 
 pixels = (
     (0, 0, 0),
@@ -131,7 +136,9 @@ if USE_CUDA:
     env_model     = env_model.cuda()
     actor_critic  = actor_critic.cuda()
 
-actor_critic.load_state_dict(torch.load("actor_critic_" + mode))
+actor_critic.load_state_dict(torch.load(load_ac_filename))
+if args.test:
+    env_model.load_state_dict(torch.load(load_env_filename))
 
 def get_action(state):
     if state.ndim == 4:
@@ -160,41 +167,42 @@ num_updates = 1000000
 losses = []
 all_rewards = []
 
-for frame_idx, states, actions, rewards, next_states, dones in play_games(envs, num_updates):
-    states      = torch.FloatTensor(states)
-    actions     = torch.LongTensor(actions)
+if not args.test:
+    for frame_idx, states, actions, rewards, next_states, dones in play_games(envs, num_updates):
+        states      = torch.FloatTensor(states)
+        actions     = torch.LongTensor(actions)
 
-    batch_size = states.size(0)
-    
-    onehot_actions = torch.zeros(batch_size, num_actions, *state_shape[1:])
-    onehot_actions[range(batch_size), actions] = 1
-    inputs = Variable(torch.cat([states, onehot_actions], 1))
-    
-    if USE_CUDA:
-        inputs = inputs.cuda()
-    imagined_state, imagined_reward = env_model(inputs)
+        batch_size = states.size(0)
+        
+        onehot_actions = torch.zeros(batch_size, num_actions, *state_shape[1:])
+        onehot_actions[range(batch_size), actions] = 1
+        inputs = Variable(torch.cat([states, onehot_actions], 1))
+        
+        if USE_CUDA:
+            inputs = inputs.cuda()
+        imagined_state, imagined_reward = env_model(inputs)
 
-    target_state = pix_to_target(next_states)
-    target_state = Variable(torch.LongTensor(target_state))
+        target_state = pix_to_target(next_states)
+        target_state = Variable(torch.LongTensor(target_state))
 
-    target_reward = rewards_to_target(mode, rewards)
-    target_reward = Variable(torch.LongTensor(target_reward))
+        target_reward = rewards_to_target(mode, rewards)
+        target_reward = Variable(torch.LongTensor(target_reward))
 
-    optimizer.zero_grad()
-    image_loss  = criterion(imagined_state, target_state)
-    reward_loss = criterion(imagined_reward, target_reward)
-    loss = image_loss + reward_coef * reward_loss
-    loss.backward()
-    optimizer.step()
-    
-    losses.append(loss.item())
-    all_rewards.append(np.mean(rewards))
-    
-    if frame_idx % 100 == 0:
-        print('epoch %s. reward: %s, loss: %s' % (frame_idx, all_rewards[-1], losses[-1]))
-        #plot(frame_idx, all_rewards, losses)
+        optimizer.zero_grad()
+        image_loss  = criterion(imagined_state, target_state)
+        reward_loss = criterion(imagined_reward, target_reward)
+        loss = image_loss + reward_coef * reward_loss
+        loss.backward()
+        optimizer.step()
+        
+        losses.append(loss.item())
+        all_rewards.append(np.mean(rewards))
+        
+        if frame_idx % 100 == 0:
+            print('epoch %s. reward: %s, loss: %s' % (frame_idx, all_rewards[-1], losses[-1]))
+            #plot(frame_idx, all_rewards, losses)
 
-torch.save(env_model.state_dict(), "env_model_" + mode)
+    torch.save(env_model.state_dict(), "env_model_" + mode)
 
 import time
 
@@ -241,5 +249,5 @@ while not done:
     plt.show()
     time.sleep(0.3)
     
-    if steps > 30:
+    if steps > 200:
         break

@@ -29,6 +29,8 @@ parser.add_argument('--num_envs', type=int, default=8,
                     help='num of cpus')
 parser.add_argument('--id', type=str, default="default",
                     help='id')
+parser.add_argument('--test', action='store_true', default=False,
+                    help='if only test')
 
 args = parser.parse_args()
 writer = SummaryWriter(f'results/{args.id}')
@@ -36,9 +38,14 @@ writer = SummaryWriter(f'results/{args.id}')
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
-load_env_filename = "env_model_sokoban"
-load_distill_filename = None#"sokoban_i2a_distill_sokoban_100_-19.87504005432129"
-load_ac_filename = None#"sokoban_i2a_ac_sokoban_100_-19.87504005432129"
+load_env_filename = "env_model_sokoban_env_fixed"
+load_distill_filename = None
+load_ac_filename = None
+
+if args.test:
+    load_env_filename = "./results/env_changed/sokoban_i2a_env_sokoban_636600_-16.287534713745117"
+    load_distill_filename = "./results/env_changed/sokoban_i2a_distill_sokoban_636600_-16.287534713745117"
+    load_ac_filename = "./results/env_changed/sokoban_i2a_distill_sokoban_636600_-16.287534713745117"
 
 pixels = (
     (0, 0, 0),
@@ -108,10 +115,13 @@ def make_env():
     return _thunk
 
 
-
-envs = [make_env() for i in range(num_envs)]
-envs = SubprocVecEnv(envs)
-
+if not args.test:
+    envs = [make_env() for i in range(num_envs)]
+    envs = SubprocVecEnv(envs)
+else:
+    envs = [make_env() for i in range(1)]
+    envs = SubprocVecEnv(envs)
+    
 state_shape = envs.observation_space.shape
 num_actions = envs.action_space.n
 num_rewards = len(task_rewards[mode])
@@ -261,137 +271,178 @@ class ImaginationCore(object):
         return torch.cat(rollout_states), torch.cat(rollout_rewards)
 
 full_rollout = True
-env_model     = EnvModel(envs.observation_space.shape, num_pixels, num_rewards)
-if load_env_filename:
-    env_model.load_state_dict(torch.load(load_env_filename))
 
-distil_policy = ActorCritic(envs.observation_space.shape, envs.action_space.n)
-if load_distill_filename:
-    distil_policy.load_state_dict(torch.load(load_distill_filename))
-distil_optimizer = optim.Adam(distil_policy.parameters())
+if not args.test:
+    env_model     = EnvModel(envs.observation_space.shape, num_pixels, num_rewards)
+    if load_env_filename:
+        env_model.load_state_dict(torch.load(load_env_filename))
 
-imagination = ImaginationCore(1, state_shape, num_actions, num_rewards, env_model, distil_policy, full_rollout=full_rollout)
+    distil_policy = ActorCritic(envs.observation_space.shape, envs.action_space.n)
+    if load_distill_filename:
+        distil_policy.load_state_dict(torch.load(load_distill_filename))
+    distil_optimizer = optim.Adam(distil_policy.parameters())
 
-actor_critic = I2A(state_shape, num_actions, num_rewards, 256, imagination, full_rollout=full_rollout)
-if load_ac_filename:
-    actor_critic.load_state_dict(torch.load(load_ac_filename))
+    imagination = ImaginationCore(1, state_shape, num_actions, num_rewards, env_model, distil_policy, full_rollout=full_rollout)
 
-#rmsprop hyperparams:
-lr    = 7e-4
-eps   = 1e-5
-alpha = 0.99
-#rmsprop
-#optimizer = optim.RMSprop(actor_critic.parameters(), lr, eps=eps, alpha=alpha)
-#adam:
-optimizer = optim.Adam(actor_critic.parameters(), lr=lr, eps=eps)
+    actor_critic = I2A(state_shape, num_actions, num_rewards, 256, imagination, full_rollout=full_rollout)
+    if load_ac_filename:
+        actor_critic.load_state_dict(torch.load(load_ac_filename))
+    #rmsprop hyperparams:
+    lr    = 7e-4
+    eps   = 1e-5
+    alpha = 0.99
+    #rmsprop
+    #optimizer = optim.RMSprop(actor_critic.parameters(), lr, eps=eps, alpha=alpha)
+    #adam:
+    optimizer = optim.Adam(actor_critic.parameters(), lr=lr, eps=eps)
 
-if USE_CUDA:
-    env_model     = env_model.cuda()
-    distil_policy = distil_policy.cuda()
-    actor_critic  = actor_critic.cuda()
+    if USE_CUDA:
+        env_model     = env_model.cuda()
+        distil_policy = distil_policy.cuda()
+        actor_critic  = actor_critic.cuda()
 
-gamma = 0.99
-entropy_coef = 0.01
-value_loss_coef = 0.5
-max_grad_norm = 0.5
-num_steps = args.num_steps
-num_frames = int(10e6)
+    gamma = 0.99
+    entropy_coef = 0.01
+    value_loss_coef = 0.5
+    max_grad_norm = 0.5
+    num_steps = args.num_steps
+    num_frames = int(10e6)
 
-rollout = RolloutStorage(num_steps, num_envs, envs.observation_space.shape)
-rollout.cuda()
+    rollout = RolloutStorage(num_steps, num_envs, envs.observation_space.shape)
+    rollout.cuda()
 
-all_rewards = []
-all_losses  = []
+    all_rewards = []
+    all_losses  = []
 
-state = envs.reset()
-current_state = torch.FloatTensor(np.float32(state))
+    state = envs.reset()
+    current_state = torch.FloatTensor(np.float32(state))
 
-rollout.states[0].copy_(current_state)
+    rollout.states[0].copy_(current_state)
 
-episode_rewards = torch.zeros(num_envs, 1) - torch.ones(num_envs, 1) * 100
-final_rewards   = torch.zeros(num_envs, 1) - torch.ones(num_envs, 1) * 100
+    episode_rewards = torch.zeros(num_envs, 1) - torch.ones(num_envs, 1) * 100
+    final_rewards   = torch.zeros(num_envs, 1) - torch.ones(num_envs, 1) * 100
 
-best_reward = -100.0
+    best_reward = -100.0
 
-for i_update in range(num_frames):
+    for i_update in range(num_frames):
+        for step in range(num_steps):
+            if USE_CUDA:
+                current_state = current_state.cuda()
+            action = actor_critic.act(Variable(current_state))
 
-    for step in range(num_steps):
-        if USE_CUDA:
-            current_state = current_state.cuda()
-        action = actor_critic.act(Variable(current_state))
+            next_state, reward, done, _ = envs.step(action.squeeze(1).cpu().data.numpy())
 
-        next_state, reward, done, _ = envs.step(action.squeeze(1).cpu().data.numpy())
+            reward = torch.FloatTensor(reward).unsqueeze(1)
+            episode_rewards += reward
+            masks = torch.FloatTensor(1-np.array(done)).unsqueeze(1)
+            final_rewards *= masks
+            final_rewards += (1-masks) * episode_rewards
+            episode_rewards *= masks
 
-        reward = torch.FloatTensor(reward).unsqueeze(1)
-        episode_rewards += reward
-        masks = torch.FloatTensor(1-np.array(done)).unsqueeze(1)
-        final_rewards *= masks
-        final_rewards += (1-masks) * episode_rewards
-        episode_rewards *= masks
+            if USE_CUDA:
+                masks = masks.cuda()
 
-        if USE_CUDA:
-            masks = masks.cuda()
-
-        current_state = torch.FloatTensor(np.float32(next_state))
-        rollout.insert(step, current_state, action.data, reward, masks)
+            current_state = torch.FloatTensor(np.float32(next_state))
+            rollout.insert(step, current_state, action.data, reward, masks)
 
 
-    _, next_value = actor_critic(Variable(rollout.states[-1], volatile=True))
-    next_value = next_value.data
+        _, next_value = actor_critic(Variable(rollout.states[-1], volatile=True))
+        next_value = next_value.data
 
-    returns = rollout.compute_returns(next_value, gamma)
+        returns = rollout.compute_returns(next_value, gamma)
 
-    logit, action_log_probs, values, entropy = actor_critic.evaluate_actions(
-        Variable(rollout.states[:-1]).view(-1, *state_shape),
-        Variable(rollout.actions).view(-1, 1)
-    )
-    
-    distil_logit, _, _, _ = distil_policy.evaluate_actions(
-        Variable(rollout.states[:-1]).view(-1, *state_shape),
-        Variable(rollout.actions).view(-1, 1)
-    )
+        logit, action_log_probs, values, entropy = actor_critic.evaluate_actions(
+            Variable(rollout.states[:-1]).view(-1, *state_shape),
+            Variable(rollout.actions).view(-1, 1)
+        )
         
-    distil_loss = 0.01 * (F.softmax(logit).detach() * F.log_softmax(distil_logit)).sum(1).mean()
+        distil_logit, _, _, _ = distil_policy.evaluate_actions(
+            Variable(rollout.states[:-1]).view(-1, *state_shape),
+            Variable(rollout.actions).view(-1, 1)
+        )
+            
+        distil_loss = 0.01 * (F.softmax(logit).detach() * F.log_softmax(distil_logit)).sum(1).mean()
 
-    values = values.view(num_steps, num_envs, 1)
-    action_log_probs = action_log_probs.view(num_steps, num_envs, 1)
-    advantages = Variable(returns) - values
+        values = values.view(num_steps, num_envs, 1)
+        action_log_probs = action_log_probs.view(num_steps, num_envs, 1)
+        advantages = Variable(returns) - values
 
-    value_loss = advantages.pow(2).mean()
-    action_loss = -(Variable(advantages.data) * action_log_probs).mean()
+        value_loss = advantages.pow(2).mean()
+        action_loss = -(Variable(advantages.data) * action_log_probs).mean()
 
-    optimizer.zero_grad()
-    loss = value_loss * value_loss_coef + action_loss - entropy * entropy_coef
-    loss.backward()
-    nn.utils.clip_grad_norm(actor_critic.parameters(), max_grad_norm)
-    optimizer.step()
-    
-    distil_optimizer.zero_grad()
-    distil_loss.backward()
-    optimizer.step()
-    
-    if i_update % 100 == 0:
-        all_rewards.append(final_rewards.mean())
-        all_losses.append(loss.item())
+        optimizer.zero_grad()
+        loss = value_loss * value_loss_coef + action_loss - entropy * entropy_coef
+        loss.backward()
+        nn.utils.clip_grad_norm(actor_critic.parameters(), max_grad_norm)
+        optimizer.step()
         
-        print('epoch %s. reward: %s, loss: %s' % (i_update, all_rewards[-1].numpy(), all_losses[-1]))
-
-        if all_rewards[-1].numpy() > best_reward:
-            best_reward = all_rewards[-1].numpy()
-            torch.save(actor_critic.state_dict(), f"results/{args.id}/sokoban_i2a_ac_{mode}_{i_update}_{best_reward}")
-            torch.save(env_model.state_dict(), f"results/{args.id}/sokoban_i2a_env_{mode}_{i_update}_{best_reward}")
-            torch.save(distil_policy.state_dict(), f"results/{args.id}/sokoban_i2a_distill_{mode}_{i_update}_{best_reward}")
-
-        writer.add_scalar('reward', all_rewards[-1].numpy(), i_update)
-        writer.add_scalar('loss', all_losses[-1], i_update)
-
-        # plt.figure(figsize=(20,5))
-        # plt.subplot(131)
-        # plt.title('epoch %s. reward: %s' % (i_update, np.mean(all_rewards[-10:])))
-        # plt.plot(all_rewards)
-        # plt.subplot(132)
-        # plt.title('loss %s' % all_losses[-1])
-        # plt.plot(all_losses)
-        # plt.draw()
+        distil_optimizer.zero_grad()
+        distil_loss.backward()
+        optimizer.step()
         
-    rollout.after_update()
+        if i_update % 100 == 0:
+            all_rewards.append(final_rewards.mean())
+            all_losses.append(loss.item())
+            
+            print('epoch %s. reward: %s, loss: %s' % (i_update, all_rewards[-1].numpy(), all_losses[-1]))
+
+            if all_rewards[-1].numpy() > best_reward:
+                best_reward = all_rewards[-1].numpy()
+                torch.save(actor_critic.state_dict(), f"results/{args.id}/sokoban_i2a_ac_{mode}_{i_update}_{best_reward}")
+                torch.save(env_model.state_dict(), f"results/{args.id}/sokoban_i2a_env_{mode}_{i_update}_{best_reward}")
+                torch.save(distil_policy.state_dict(), f"results/{args.id}/sokoban_i2a_distill_{mode}_{i_update}_{best_reward}")
+
+            writer.add_scalar('reward', all_rewards[-1].numpy(), i_update)
+            writer.add_scalar('loss', all_losses[-1], i_update)
+        
+        if i_update % 1000000 == 0:
+            torch.save(actor_critic.state_dict(), f"results/{args.id}/sokoban_i2a_ac_{mode}_{i_update}_{all_rewards[-1].numpy()}")
+            torch.save(env_model.state_dict(), f"results/{args.id}/sokoban_i2a_env_{mode}_{i_update}_{all_rewards[-1].numpy()}")
+            torch.save(distil_policy.state_dict(), f"results/{args.id}/sokoban_i2a_distill_{mode}_{i_update}_{all_rewards[-1].numpy()}")
+
+        rollout.after_update()
+
+else:
+    # test from here
+    import time
+
+    def get_action(state):
+        if state.ndim == 4:
+            state = torch.FloatTensor(np.float32(state))
+        else:
+            state = torch.FloatTensor(np.float32(state)).unsqueeze(0)
+        
+        with torch.no_grad():
+            action = distil_policy.act(Variable(state))
+            action = action.data.cpu().squeeze(1).numpy()
+            return action
+
+    distil_policy = ActorCritic(envs.observation_space.shape, envs.action_space.n)
+    if load_distill_filename:
+        distil_policy.load_state_dict(torch.load(load_distill_filename))
+    
+    if USE_CUDA:
+        distil_policy = distil_policy.cuda()
+
+    env = ChannelFirstEnv(gym.make('Boxoban-Train-v0'))
+    batch_size = 1
+
+    done = False
+    state = env.reset()
+    iss = []
+    ss  = []
+
+    steps = 0
+
+    while not done:
+        steps += 1
+        actions = get_action(state)
+        
+        next_state, reward, done, _ = env.step(actions[0])
+        state = next_state        
+        env.render()
+
+        time.sleep(0.3)
+        
+        if steps > 200:
+            break
