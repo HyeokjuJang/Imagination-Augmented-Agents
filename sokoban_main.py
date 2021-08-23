@@ -38,7 +38,7 @@ writer = SummaryWriter(f'results/{args.id}')
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
-load_env_filename = "env_model_sokoban_env_fixed"
+load_env_filename = "env_model_sokoban"
 load_distill_filename = None
 load_ac_filename = None
 
@@ -241,7 +241,8 @@ class ImaginationCore(object):
             action = action.view(-1)
             rollout_batch_size = batch_size * self.num_actions
         else:
-            action = self.distil_policy.act(Variable(state, volatile=True))
+            with torch.no_grad():
+                action = self.distil_policy.act(Variable(state))
             action = action.data.cpu()
             rollout_batch_size = batch_size
 
@@ -250,11 +251,15 @@ class ImaginationCore(object):
             onehot_action[range(rollout_batch_size), action] = 1
             inputs = torch.cat([state, onehot_action], 1)
 
-            imagined_state, imagined_reward = self.env_model(Variable(inputs, volatile=True))
+            with torch.no_grad():
+                imagined_state, imagined_reward = self.env_model(Variable(inputs))
 
-            imagined_state  = F.softmax(imagined_state).max(1)[1].data.cpu()
-            imagined_reward = F.softmax(imagined_reward).max(1)[1].data.cpu()
-
+            # print(imagined_state.shape) # [7200, 7]
+            # print(imagined_reward.shape) # [72, 5]
+            imagined_state  = F.softmax(imagined_state, dim=0).max(1)[1].data.cpu()
+            # print(imagined_state.shape) # [7200]
+            imagined_reward = F.softmax(imagined_reward, dim=0).max(1)[1].data.cpu()
+            # print(imagined_reward.shape) [72]
             imagined_state = target_to_pix(imagined_state.numpy())
             imagined_state = torch.FloatTensor(imagined_state).view(rollout_batch_size, *self.in_shape)
 
@@ -265,7 +270,8 @@ class ImaginationCore(object):
             rollout_rewards.append(onehot_reward.unsqueeze(0))
 
             state  = imagined_state
-            action = self.distil_policy.act(Variable(state, volatile=True))
+            with torch.no_grad():
+                action = self.distil_policy.act(Variable(state))
             action = action.data.cpu()
         
         return torch.cat(rollout_states), torch.cat(rollout_rewards)
@@ -345,8 +351,8 @@ if not args.test:
             current_state = torch.FloatTensor(np.float32(next_state))
             rollout.insert(step, current_state, action.data, reward, masks)
 
-
-        _, next_value = actor_critic(Variable(rollout.states[-1], volatile=True))
+        with torch.no_grad():
+            _, next_value = actor_critic(Variable(rollout.states[-1]))
         next_value = next_value.data
 
         returns = rollout.compute_returns(next_value, gamma)
@@ -360,9 +366,8 @@ if not args.test:
             Variable(rollout.states[:-1]).view(-1, *state_shape),
             Variable(rollout.actions).view(-1, 1)
         )
-            
-        distil_loss = 0.01 * (F.softmax(logit).detach() * F.log_softmax(distil_logit)).sum(1).mean()
-
+        
+        distil_loss = 0.01 * (F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)).sum(1).mean()
         values = values.view(num_steps, num_envs, 1)
         action_log_probs = action_log_probs.view(num_steps, num_envs, 1)
         advantages = Variable(returns) - values
@@ -373,7 +378,7 @@ if not args.test:
         optimizer.zero_grad()
         loss = value_loss * value_loss_coef + action_loss - entropy * entropy_coef
         loss.backward()
-        nn.utils.clip_grad_norm(actor_critic.parameters(), max_grad_norm)
+        nn.utils.clip_grad_norm_(actor_critic.parameters(), max_grad_norm)
         optimizer.step()
         
         distil_optimizer.zero_grad()
