@@ -23,10 +23,12 @@ import argparse
 from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--num_steps', type=int, default=5,
+parser.add_argument('--num_steps', type=int, default=32,
                     help='num of steps')
 parser.add_argument('--num_envs', type=int, default=8,
                     help='num of cpus')
+parser.add_argument('--num_rollouts', type=int, default=5,
+                    help='num of rollouts')
 parser.add_argument('--id', type=str, default="default",
                     help='id')
 parser.add_argument('--test', action='store_true', default=False,
@@ -125,6 +127,7 @@ else:
 state_shape = envs.observation_space.shape
 num_actions = envs.action_space.n
 num_rewards = len(task_rewards[mode])
+num_rolouts = args.num_rollouts
 
 class RolloutEncoder(nn.Module):
     def __init__(self, in_shape, num_rewards, hidden_size):
@@ -256,6 +259,7 @@ class ImaginationCore(object):
 
             # print(imagined_state.shape) # [7200, 7]
             # print(imagined_reward.shape) # [72, 5]
+            
             imagined_state  = F.softmax(imagined_state, dim=0).max(1)[1].data.cpu()
             # print(imagined_state.shape) # [7200]
             imagined_reward = F.softmax(imagined_reward, dim=0).max(1)[1].data.cpu()
@@ -288,9 +292,9 @@ if not args.test:
         distil_policy.load_state_dict(torch.load(load_distill_filename))
     distil_optimizer = optim.Adam(distil_policy.parameters())
 
-    imagination = ImaginationCore(1, state_shape, num_actions, num_rewards, env_model, distil_policy, full_rollout=full_rollout)
+    imagination = ImaginationCore(num_rolouts, state_shape, num_actions, num_rewards, env_model, distil_policy, full_rollout=full_rollout)
 
-    actor_critic = I2A(state_shape, num_actions, num_rewards, 256, imagination, full_rollout=full_rollout)
+    actor_critic = I2A(state_shape, num_actions, num_rewards, 512, imagination, full_rollout=full_rollout)
     if load_ac_filename:
         actor_critic.load_state_dict(torch.load(load_ac_filename))
     #rmsprop hyperparams:
