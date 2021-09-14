@@ -23,7 +23,7 @@ import argparse
 from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--num_steps', type=int, default=32,
+parser.add_argument('--num_steps', type=int, default=8,
                     help='num of steps')
 parser.add_argument('--num_envs', type=int, default=8,
                     help='num of cpus')
@@ -387,7 +387,7 @@ if not args.test:
         
         distil_optimizer.zero_grad()
         distil_loss.backward()
-        optimizer.step()
+        distil_optimizer.step()
         
         if i_update % 100 == 0:
             all_rewards.append(final_rewards.mean())
