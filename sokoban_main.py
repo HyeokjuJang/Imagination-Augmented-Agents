@@ -370,12 +370,19 @@ if not args.test:
             Variable(rollout.states[:-1]).view(-1, *state_shape),
             Variable(rollout.actions).view(-1, 1)
         )
-        
+
+        # debug logit size
+        # print("logit: ", logit.shape) # [64, 9]
+        # print("distil_logit: ", distil_logit.shape) # [64, 9]
+        # print("*: ", (F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)).shape) # [64, 9]
+        # print("*,sum: ", (F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)).sum(1).shape) # [64]
+        # print("*,sum,mean: ", (F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)).sum(1).mean()) # -6.3965
+
         distil_loss = 0.01 * (F.softmax(logit, dim=1).detach() * F.log_softmax(distil_logit, dim=1)).sum(1).mean()
         values = values.view(num_steps, num_envs, 1)
         action_log_probs = action_log_probs.view(num_steps, num_envs, 1)
         advantages = Variable(returns) - values
-
+        
         value_loss = advantages.pow(2).mean()
         action_loss = -(Variable(advantages.data) * action_log_probs).mean()
 
